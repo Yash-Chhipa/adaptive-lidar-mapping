@@ -551,6 +551,28 @@ try:
                 dynamic_centroid = (float(c_mean[0]), float(c_mean[1]))
             elif lbl == "static_obstacle":
                 num_obstacle_clusters += 1
+        # After processing clusters, update tracker and debug information
+        # Approximate frame delta time for synthetic mode (fixed 10 FPS)
+        _delta_t = 0.1
+        prev_tracks = st.session_state.tracks
+        new_tracks, debug = update_tracker(
+            prev_tracks,
+            clusters,
+            match_dist=track_match_dist,
+            max_miss=max_miss,
+            delta_t=_delta_t,
+            dyn_speed_thr=dyn_speed_thr,
+        )
+        st.session_state.tracks = new_tracks
+        track_debug = {
+            "active_tracks": debug.get("active_tracks", 0),
+            "dynamic": debug.get("dynamic", 0),
+            "static": debug.get("static", 0),
+        }
+
+
+
+
 
         if cluster_pts_list:
             final_points = np.vstack([ground_pts] + cluster_pts_list)
@@ -694,32 +716,45 @@ if system_error:
 # ---------------------------------------------------------
 # Primary Metrics Telemetry Row
 # ---------------------------------------------------------
-cols = st.columns(7)
-(p1, p2, p3, p4, p5, p6, p7) = cols
+cols = st.columns(10)
+# Primary Metrics Telemetry Row
 
-metric_specs = [
-    (p1, "PIPELINE FPS", f"{fps:.1f}", "cyan", False),
-    (p2, "ADAPTIVE CELLS", f"{adaptive_cells_count:,}", "", False),
-    (p3, "UNIFORM CELLS (0.05m)", f"{uniform_cells_count:,}", "", False),
-    (p4, "MEMORY SAVED", f"{memory_saved_pct:.2f}%", "green", True),
-    (p5, "TRACKED OBJECTS", f"{track_debug.get('active_tracks', 0):,}", "", False),
-    (p6, "DYNAMIC OBJECTS", f"{track_debug.get('dynamic', 0):,}", "", False),
-    (p7, "STATIC OBJECTS", f"{track_debug.get('static', 0):,}", "green", False),
-]
+(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10) = cols
+num_static_clusters = num_obstacle_clusters - num_dynamic_clusters
 
-for col, label, value, value_class, highlight in metric_specs:
+# Unified metrics dictionary (values sourced from pipeline)
+metrics = {
+    "TOTAL POINTS": f"{total_raw_points:,}",
+    "NON-GROUND POINTS": f"{non_ground_points_count:,}",
+    "OBSTACLE CLUSTERS": f"{num_obstacle_clusters:,}",
+    "PIPELINE FPS": f"{fps:.1f}",
+    "ADAPTIVE CELLS": f"{adaptive_cells_count:,}",
+    "UNIFORM CELLS (0.05m)": f"{uniform_cells_count:,}",
+    "MEMORY SAVED": f"{memory_saved_pct:.2f}%",
+    "TRACKED OBJECTS": f"{num_obstacle_clusters:,}" if data_source == "Synthetic" else "N/A",
+    "DYNAMIC OBJECTS": f"{num_dynamic_clusters:,}" if data_source == "Synthetic" else "N/A",
+    "STATIC OBJECTS": f"{num_static_clusters:,}" if data_source == "Synthetic" else "N/A",
+}
+
+# Render metric cards
+for col, (label, value) in zip(cols, metrics.items()):
+    highlight = label == "MEMORY SAVED"
     card_class = "metric-card highlight" if highlight else "metric-card"
-    class_attr = f"metric-value {value_class}" if value_class else "metric-value"
+    value_class = "green" if highlight else ""
     with col:
         st.markdown(
             f"""
-            <div class="{card_class}">
-              <div class="metric-label">{label}</div>
-              <div class="{class_attr}">{value}</div>
+            <div class=\"{card_class}\">
+              <div class=\"metric-label\">{label}</div>
+              <div class=\"metric-value {value_class}\">{value}</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
+
+
+# Duplicate metric block placeholder removed
+# Duplicate metric block removed
 
 # Secondary Diagnostics Strip
 if data_source == "Synthetic":
