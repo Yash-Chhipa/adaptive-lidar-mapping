@@ -1,3 +1,4 @@
 libegl1
 libgl1
 libgomp1
+libusb-1.0-0
